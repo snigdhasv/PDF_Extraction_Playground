@@ -1,0 +1,45 @@
+# Core Framework
+fastapi[standard]==0.115.0
+uvicorn[standard]==0.30.6
+python-multipart==0.0.9
+
+# Modal SDK for serverless deployment
+modal==0.64.0
+
+# PDF Processing
+pypdf==4.3.1
+PyMuPDF==1.24.10
+pillow==10.4.0
+
+# File type detection
+python-magic==0.4.27
+
+# HTTP requests (for downloading models if needed)
+httpx==0.27.0
+requests==2.32.3
+
+# Data validation
+pydantic==2.9.0
+pydantic-settings==2.5.0
+
+# Utilities
+python-dotenv==1.0.1
+
+# Logging and monitoring
+loguru==0.7.2
+
+# Model dependencies (will be added as we integrate each model)
+# These will be uncommented as we implement each extraction pipeline:
+
+# For Docling
+# docling==1.0.0
+
+# For Surya
+# surya-ocr==0.4.0
+# torch==2.1.0
+
+# For MinerU
+# magic-pdf==0.7.0
+
+# For DOTS OCR
+# dots-ocr (check their repo for exact package name)
