@@ -5,6 +5,11 @@ from fastapi.responses import JSONResponse
 import logging
 from typing import Optional
 from datetime import datetime
+import sys
+from pathlib import Path
+
+# Add extractors directory to path
+sys.path.insert(0, str(Path(__file__).parent))
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -16,13 +21,22 @@ app = modal.App("pdf-extraction-playground")
 # Define Modal image with dependencies
 image = (
     modal.Image.debian_slim(python_version="3.11")
+    .apt_install("poppler-utils", "tesseract-ocr")  # Required for some PDF processing
     .pip_install(
         "fastapi[standard]==0.115.0",
         "python-multipart==0.0.9",
         "pillow==10.4.0",
         "pypdf==4.3.1",
         "python-magic==0.4.27",
+        "docling==2.5.2",  # Docling for PDF extraction
+        "pydantic==2.9.0",
     )
+)
+
+# Mount local extractors directory
+extractors_mount = modal.Mount.from_local_dir(
+    local_path="./extractors",
+    remote_path="/root/extractors"
 )
 
 # Create FastAPI instance
@@ -78,14 +92,14 @@ async def list_models():
             "description": "Multilingual document OCR and layout analysis",
             "capabilities": ["text", "layout", "multilingual"],
             "best_for": "Multilingual documents and complex layouts",
-            "status": "available"
+            "status": "coming_soon"
         },
         "mineru": {
             "name": "MinerU",
             "description": "PDF extraction for scientific documents",
             "capabilities": ["text", "tables", "formulas", "figures"],
             "best_for": "Scientific papers and academic documents",
-            "status": "available"
+            "status": "coming_soon"
         }
     }
     return {"models": models}
@@ -110,7 +124,7 @@ async def upload_pdf(
         if not file.filename.endswith('.pdf'):
             raise HTTPException(status_code=400, detail="Only PDF files are supported")
         
-        # Validate file size (max 50MB for initial setup)
+        # Validate file size (max 50MB)
         contents = await file.read()
         file_size = len(contents)
         max_size = 50 * 1024 * 1024  # 50MB
@@ -122,11 +136,11 @@ async def upload_pdf(
             )
         
         # Validate model selection
-        valid_models = ["docling", "surya", "mineru"]
+        valid_models = ["docling"]  # Only docling is implemented for now
         if model not in valid_models:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid model. Choose from: {', '.join(valid_models)}"
+                detail=f"Invalid model. Currently available: {', '.join(valid_models)}"
             )
         
         logger.info(f"Received PDF: {file.filename} ({file_size / 1024:.2f} KB)")
@@ -155,51 +169,57 @@ async def extract_pdf(
     model: str = Form(default="docling")
 ):
     """
-    Extract content from PDF (placeholder for model integration)
+    Extract content from PDF using selected model
     
-    This endpoint will be expanded to call actual extraction models
+    Args:
+        file: PDF file to extract
+        model: Extraction model (currently only 'docling' is available)
+    
+    Returns:
+        Extracted content with markdown, elements, and bounding boxes
     """
     try:
         # Validate inputs
         if not file.filename.endswith('.pdf'):
             raise HTTPException(status_code=400, detail="Only PDF files are supported")
         
+        # Read file contents
         contents = await file.read()
         file_size = len(contents)
         
+        # Size check
+        max_size = 50 * 1024 * 1024
+        if file_size > max_size:
+            raise HTTPException(status_code=400, detail="File too large")
+        
         logger.info(f"Starting extraction for {file.filename} using {model}")
         
-        # Placeholder response - will be replaced with actual model calls
-        return JSONResponse(content={
-            "status": "success",
-            "message": "Extraction completed (placeholder)",
-            "extraction": {
-                "filename": file.filename,
-                "model_used": model,
-                "pages": 1,
-                "extracted_text": "This is a placeholder. Model integration coming next.",
-                "elements": {
-                    "titles": 0,
-                    "headers": 0,
-                    "paragraphs": 0,
-                    "tables": 0
-                },
-                "processing_time_ms": 0
-            }
-        })
+        # Route to appropriate extractor
+        if model == "docling":
+            from extractors.docling_extractor import DoclingExtractor
+            extractor = DoclingExtractor()
+            result = extractor.extract(contents, file.filename)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Model '{model}' not implemented yet. Use 'docling'."
+            )
+        
+        return JSONResponse(content=result)
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error during extraction: {str(e)}")
+        logger.error(f"Error during extraction: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
 
 # Deploy FastAPI app on Modal
 @app.function(
     image=image,
-    gpu=None,  # Start without GPU, add later when integrating models
-    timeout=300,  # 5 minutes
+    gpu=None,  # Start without GPU
+    timeout=600,  # 10 minutes for PDF processing
     allow_concurrent_inputs=10,
+    mounts=[extractors_mount],
 )
 @modal.asgi_app()
 def fastapi_app():

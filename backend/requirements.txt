@@ -31,8 +31,8 @@ loguru==0.7.2
 # Model dependencies (will be added as we integrate each model)
 # These will be uncommented as we implement each extraction pipeline:
 
-# For Docling
-# docling==1.0.0
+# For Docling (ACTIVE)
+docling==2.5.2
 
 # For Surya
 # surya-ocr==0.4.0
